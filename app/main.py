@@ -52,7 +52,9 @@ def main():
     # TODO: Uncomment the following line to pass the first stage
     message = chat.choices[0].message
     print(message.content)
-    
+    function_name = message.tool_calls[0].function.name
+    function_args = message.tool_calls[0].function.arguments
+    print(function_name, function_args)
 
 if __name__ == "__main__":
     main()
