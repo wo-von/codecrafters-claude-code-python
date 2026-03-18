@@ -16,8 +16,11 @@ def read_file(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
+def write_file(path: str, content: str):
+    with open(path, "w") as f:
+        f.write(content)
 
-def build_tool_spec() -> dict[str, Any]:
+def read_tool_spec() -> dict[str, Any]:
     return {
         "type": "function",
         "function": {
@@ -32,6 +35,30 @@ def build_tool_spec() -> dict[str, Any]:
                     }
                 },
                 "required": ["file_path"],
+            },
+        },
+    }
+
+
+def write_tool_spec() -> dict[str, any]: # type: ignore
+    return {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file",
+            "parameters": {
+                "type": "object",
+                "required": ["file_path", "content"],
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "The path of the file to write to",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The content to write to the file",
+                    },
+                },
             },
         },
     }
@@ -52,7 +79,7 @@ def run_loop(client: OpenAI, message_lst: list[ChatCompletionMessageParam]) -> N
         completion = client.chat.completions.create(
             model=get_model_name(),
             messages=message_lst,
-            tools=[build_tool_spec()],
+            tools=[read_tool_spec(), write_tool_spec()], # type: ignore
         )
 
         if not completion.choices:
@@ -66,6 +93,9 @@ def run_loop(client: OpenAI, message_lst: list[ChatCompletionMessageParam]) -> N
             args = json.loads(tool_call.function.arguments)
             if function_name == "read_file":
                 content = read_file(args["file_path"])
+            elif function_name == "write_file":
+                write_file(args["file_path"], args["content"])
+                content = "File written successfully"
             else:
                 raise RuntimeError(f"Unknown tool function: {function_name}")
             message_lst.append(
@@ -73,7 +103,7 @@ def run_loop(client: OpenAI, message_lst: list[ChatCompletionMessageParam]) -> N
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": content,
-                }
+                } # type: ignore
             )
             continue
 
