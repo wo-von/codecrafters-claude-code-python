@@ -3,6 +3,7 @@ import json
 import os
 import sys
 from typing import Any, Dict, List
+import subprocess
 
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -21,6 +22,9 @@ def write_file(path: str, content: str) -> str:
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return "File written successfully"
+
+def bash_cmd(cmd:str) -> str:
+    return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
 
 
 def read_tool_spec() -> Dict[str, Any]:
@@ -60,6 +64,24 @@ def write_tool_spec() -> Dict[str, Any]:
         },
     }
 
+def bash_tool_spec() -> Dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "bash_cmd",
+            "description": "Execute a shell command",
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to execute",
+                    }
+                },
+            },
+        },
+    }
 
 def get_model_name() -> str:
     return "z-ai/glm-4.5-air:free" if IS_LOCAL else "anthropic/claude-haiku-4.5"
@@ -77,11 +99,13 @@ def execute_tool_call(tool_call: Any) -> str:
         return read_file(args["file_path"])
     if tool_call.function.name == "write_file":
         return write_file(args["file_path"], args["content"])
+    if tool_call.function.name == "bash_cmd":
+        return bash_cmd(args["command"])
     raise RuntimeError(f"Unknown tool function: {tool_call.function.name}")
 
 
 def run_loop(client: OpenAI, message_lst: List[ChatCompletionMessageParam]) -> None:
-    tools = [read_tool_spec(), write_tool_spec()]
+    tools = [read_tool_spec(), write_tool_spec(), bash_tool_spec()]
     while True:
         completion = client.chat.completions.create(
             model=get_model_name(),
