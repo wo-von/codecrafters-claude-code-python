@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Any
+from typing import Any, Dict, List
 
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -16,11 +16,14 @@ def read_file(path: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
-def write_file(path: str, content: str):
-    with open(path, "w") as f:
-        f.write(content)
 
-def read_tool_spec() -> dict[str, Any]:
+def write_file(path: str, content: str) -> str:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return "File written successfully"
+
+
+def read_tool_spec() -> Dict[str, Any]:
     return {
         "type": "function",
         "function": {
@@ -40,7 +43,7 @@ def read_tool_spec() -> dict[str, Any]:
     }
 
 
-def write_tool_spec() -> dict[str, any]: # type: ignore
+def write_tool_spec() -> Dict[str, Any]:
     return {
         "type": "function",
         "function": {
@@ -48,17 +51,11 @@ def write_tool_spec() -> dict[str, any]: # type: ignore
             "description": "Write content to a file",
             "parameters": {
                 "type": "object",
-                "required": ["file_path", "content"],
                 "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The path of the file to write to",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "The content to write to the file",
-                    },
+                    "file_path": {"type": "string", "description": "Path of the file"},
+                    "content": {"type": "string", "description": "Content to write"},
                 },
+                "required": ["file_path", "content"],
             },
         },
     }
@@ -74,42 +71,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_loop(client: OpenAI, message_lst: list[ChatCompletionMessageParam]) -> None:
+def execute_tool_call(tool_call: Any) -> str:
+    args = json.loads(tool_call.function.arguments)
+    if tool_call.function.name == "read_file":
+        return read_file(args["file_path"])
+    if tool_call.function.name == "write_file":
+        return write_file(args["file_path"], args["content"])
+    raise RuntimeError(f"Unknown tool function: {tool_call.function.name}")
+
+
+def run_loop(client: OpenAI, message_lst: List[ChatCompletionMessageParam]) -> None:
+    tools = [read_tool_spec(), write_tool_spec()]
     while True:
         completion = client.chat.completions.create(
             model=get_model_name(),
             messages=message_lst,
-            tools=[read_tool_spec(), write_tool_spec()], # type: ignore
+            tools=tools,
         )
 
         if not completion.choices:
             raise RuntimeError("No choices in response")
+
         message = completion.choices[0].message
         message_lst.append(message)
 
-        if message.tool_calls:
-            tool_call = message.tool_calls[0]
-            function_name = tool_call.function.name
-            args = json.loads(tool_call.function.arguments)
-            if function_name == "read_file":
-                content = read_file(args["file_path"])
-            elif function_name == "write_file":
-                write_file(args["file_path"], args["content"])
-                content = "File written successfully"
-            else:
-                raise RuntimeError(f"Unknown tool function: {function_name}")
-            message_lst.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": content,
-                } # type: ignore
-            )
-            continue
+        if not message.tool_calls:
+            print(message.content)
+            break
 
-        # Final model output
-        print(message.content)
-        break
+        tool_response = execute_tool_call(message.tool_calls[0])
+        message_lst.append(
+            {"role": "tool", "tool_call_id": message.tool_calls[0].id, "content": tool_response}
+        )
 
 
 def main() -> None:
@@ -117,7 +110,7 @@ def main() -> None:
     if not API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
     client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
-    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": args.p}]
+    messages: List[ChatCompletionMessageParam] = [{"role": "user", "content": args.p}]
     print(f"Using model: {get_model_name()}", file=sys.stderr)
     run_loop(client, messages)
 
