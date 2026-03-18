@@ -23,8 +23,11 @@ def write_file(path: str, content: str) -> str:
         f.write(content)
     return "File written successfully"
 
-def bash_cmd(cmd:str) -> str:
-    return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
+
+def bash_cmd(cmd: str) -> str:
+    return subprocess.run(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    ).stdout
 
 
 def read_tool_spec() -> Dict[str, Any]:
@@ -64,6 +67,7 @@ def write_tool_spec() -> Dict[str, Any]:
         },
     }
 
+
 def bash_tool_spec() -> Dict[str, Any]:
     return {
         "type": "function",
@@ -82,6 +86,7 @@ def bash_tool_spec() -> Dict[str, Any]:
             },
         },
     }
+
 
 def get_model_name() -> str:
     return "z-ai/glm-4.5-air:free" if IS_LOCAL else "anthropic/claude-haiku-4.5"
@@ -125,7 +130,11 @@ def run_loop(client: OpenAI, message_lst: List[ChatCompletionMessageParam]) -> N
 
         tool_response = execute_tool_call(message.tool_calls[0])
         message_lst.append(
-            {"role": "tool", "tool_call_id": message.tool_calls[0].id, "content": tool_response}
+            {
+                "role": "tool",
+                "tool_call_id": message.tool_calls[0].id,
+                "content": tool_response,
+            }
         )
 
 
