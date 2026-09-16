@@ -1,1 +1,0 @@
-sina is an apple
